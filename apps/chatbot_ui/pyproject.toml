@@ -1,27 +1,18 @@
 [project]
-name = "prerequisites"
+name = "chatbot-ui"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
+authors = [
+    { name = "ganesh.musne", email = "ganesh.musne.8@gmail.com" }
+]
 requires-python = ">=3.14"
 dependencies = [
-    "google-genai>=2.27.0",
-    "ipykernel>=7.4.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
-    "python-dotenv>=1.2.4",
     "streamlit>=1.65.0",
 ]
-
-[project.scripts]
-prerequisites = "prerequisites:main"
 
 [build-system]
 requires = ["uv_build>=0.12.19,<0.13.0"]
 build-backend = "uv_build"
-
-[tool.uv.workspace]
-members = [
-    "apps/api",
-    "apps/chatbot_ui",
-]
