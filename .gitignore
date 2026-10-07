@@ -208,3 +208,9 @@ __marimo__/
 
 .vscode
 data
+
+# macOS metadata
+.DS_Store
+
+# Local Qdrant storage
+/qdrant_data/
