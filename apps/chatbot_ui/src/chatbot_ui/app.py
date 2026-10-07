@@ -46,7 +46,7 @@ with st.sidebar:
     elif provider == "Groq":
         model_name = st.selectbox("Model", ["llama-3.3-70b-versatile"])
     else:
-        model_name = st.selectbox("Model", ["gemini-3.5-flash"])
+        model_name = st.selectbox("Model", ["gemini-3.5-flash", "gemini-3.8-flash"])
 
     # Save provider and model to session state
     st.session_state.provider = provider
