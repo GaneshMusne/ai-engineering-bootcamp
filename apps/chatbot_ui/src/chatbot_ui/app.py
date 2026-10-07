@@ -18,12 +18,16 @@ def api_call(method, url, **kwargs):
         try:
             response_data = response.json()
         except requests.exceptions.JSONDecodeError:
-            response_data = {"message": "Invalid response format from server"}
+            return False, {"message": "Invalid response format from server"}
 
-        if response.ok:
-            return True, response_data
+        if not response.ok:
+            detail = response_data.get("detail", response_data.get("message")) if isinstance(response_data, dict) else None
+            return False, {"message": str(detail or f"API request failed (HTTP {response.status_code})")}
 
-        return False, response_data
+        if not isinstance(response_data, dict) or not isinstance(response_data.get("message"), str):
+            return False, {"message": "The API response is missing an answer."}
+
+        return True, response_data
 
     except requests.exceptions.ConnectionError:
         _show_error_popup("Connection error. Please check your network connection.")
@@ -35,39 +39,9 @@ def api_call(method, url, **kwargs):
         _show_error_popup(f"An unexpected error occurred: {str(e)}")
         return False, {"message": str(e)}
 
-## Lets create a sidebar with a dropdown for the model list and providers
 with st.sidebar:
-    st.title("Settings")
-
-    #Dropdown for model
-    provider = st.selectbox("Provider", ["OpenAI", "Groq", "Google"])
-    if provider == "OpenAI":
-        model_name = st.selectbox("Model", ["gpt-5-nano", "gpt-5-mini"])
-    elif provider == "Groq":
-        model_name = st.selectbox("Model", ["llama-3.3-70b-versatile"])
-    else:
-        model_name = st.selectbox("Model", [
-                                            "gemini-3.8-flash",
-                                            "gemini-3.8-live",
-                                            "gemini-3.8-live-extended-thinking",
-                                            "gemini-3.8-flash-tts",
-                                            "gemini-3.8-flash-lite-tts",
-                                            "gemini-3.7-flash",
-                                            "gemini-3.6-flash",
-                                            "gemini-3.5-flash",
-                                            "gemini-3.5-flash-lite",
-                                            "gemini-3.1-flash-lite",
-                                            "gemini-3.1-pro-preview",
-                                            "gemini-3-flash-preview",
-                                            "gemini-3.5-live-translate-preview",
-                                            "gemini-3.1-flash-live-preview",
-                                            "gemini-3.1-flash-tts-preview"
-                                            ]
-                                )
-
-    # Save provider and model to session state
-    st.session_state.provider = provider
-    st.session_state.model_name = model_name
+    st.title("Shopping assistant")
+    st.caption("Answers use the available products retrieved by the RAG API.")
 
 
 if "messages" not in st.session_state:
@@ -85,8 +59,15 @@ if prompt := st.chat_input("Hello! How can I assist you today?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        output = api_call("post", f"{config.API_URL}/chat", json={"provider": st.session_state.provider, "models_name": st.session_state.model_name, "messages": st.session_state.messages})
-        response_data = output[1]
-        answer = response_data["message"]
-        st.write(answer)
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+        success, response_data = api_call(
+            "post",
+            f"{config.API_URL.rstrip('/')}/rag/",
+            json={"query": prompt},
+            timeout=120,
+        )
+        if success:
+            answer = response_data["message"]
+            st.write(answer)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+        else:
+            st.error(response_data["message"])
