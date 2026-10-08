@@ -1,13 +1,16 @@
 import os
 from functools import lru_cache
+from threading import Lock
 from langsmith import traceable, get_current_run_tree
 
 from google import genai
+from google.genai import types
 
 COLLECTION_NAME = "Amazon-items-minilm-l6-v2"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 EMBEDDING_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+_EMBEDDING_LOCK = Lock()
 
 @lru_cache(maxsize=1)
 def get_embedding_model():
@@ -24,11 +27,14 @@ def get_embedding_model():
     },
 )
 def get_embedding(text: str) -> list[float]:
-    return (
-        get_embedding_model()
-        .encode(text, normalize_embeddings=True)
-        .tolist()
-    )
+    # lru_cache can initialize twice on concurrent cache misses. Serialize
+    # loading and inference through the shared local embedding model.
+    with _EMBEDDING_LOCK:
+        return (
+            get_embedding_model()
+            .encode(text, normalize_embeddings=True)
+            .tolist()
+        )
 
 
 @traceable(
@@ -107,10 +113,21 @@ Question:
 @traceable(
     name="generate_answer",
     run_type="llm",
-    metadata={"ls_provider": "google", "ls_model_name": "gemini-3.5-flash-lite"}
+    metadata={"ls_provider": "google", "ls_model_name": GEMINI_MODEL}
 )
 def generate_answer(prompt):
-    with genai.Client(api_key=os.getenv("GOOGLE_API_KEY")) as client:
+    with genai.Client(
+        api_key=os.getenv("GOOGLE_API_KEY"),
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(
+                attempts=6,
+                initial_delay=2.0,
+                max_delay=30.0,
+                exp_base=2.0,
+                jitter=1.0,
+            )
+        ),
+    ) as client:
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             contents=prompt,

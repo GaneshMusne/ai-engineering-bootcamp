@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.142.2",
     "google-genai>=2.27.0",
     "groq>=1.7.0",
+    "langchain-google-genai>=4.4.0",
     "langgraph>=1.2.14",
     "langsmith>=0.14.4",
     "openai>=3.24.0",
