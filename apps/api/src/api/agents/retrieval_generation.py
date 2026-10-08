@@ -1,5 +1,6 @@
 import os
 from functools import lru_cache
+from langsmith import traceable, get_current_run_tree
 
 from google import genai
 
@@ -14,9 +15,26 @@ def get_embedding_model():
 
     return SentenceTransformer(EMBEDDING_MODEL_NAME)
 
-def get_embedding(text):
-    return get_embedding_model().encode(text, normalize_embeddings=True).tolist()
+@traceable(
+    name="embed_query",
+    run_type="embedding",
+    metadata={
+        "ls_provider": "huggingface",
+        "ls_model_name": EMBEDDING_MODEL_NAME,
+    },
+)
+def get_embedding(text: str) -> list[float]:
+    return (
+        get_embedding_model()
+        .encode(text, normalize_embeddings=True)
+        .tolist()
+    )
 
+
+@traceable(
+    name="retrieve_data",
+    run_type="retriever"
+)
 def retrieve_data(query, qdrant_client, k=5):
 
     query_embedding = get_embedding(query)
@@ -45,6 +63,11 @@ def retrieve_data(query, qdrant_client, k=5):
         "retrieved_context_ratings": retrieved_context_ratings
     }
 
+
+@traceable(
+    name="format_retrieved_context",
+    run_type="prompt"
+)
 def process_context(context):
 
     formatted_context = ""
@@ -54,6 +77,11 @@ def process_context(context):
 
     return formatted_context
 
+
+@traceable(
+    name="build_prompt",
+    run_type="prompt"
+)
 def build_prompt(preprocessed_context, question):
 
     prompt = f"""
@@ -75,6 +103,12 @@ Question:
 
     return prompt
 
+
+@traceable(
+    name="generate_answer",
+    run_type="llm",
+    metadata={"ls_provider": "google", "ls_model_name": "gemini-3.5-flash-lite"}
+)
 def generate_answer(prompt):
     with genai.Client(api_key=os.getenv("GOOGLE_API_KEY")) as client:
         response = client.models.generate_content(
@@ -83,10 +117,30 @@ def generate_answer(prompt):
         )
     if not response.text:
         raise RuntimeError("Gemini returned no text. Check the response for blocked content.")
+    current_run = get_current_run_tree()
+    if current_run:
+        current_run.metadata["usage_metdata"] = {
+            "input_tokens": response.usage_metadata.prompt_token_count,
+            "total_tokens": response.usage_metadata.total_token_count
+        }
+
     return response.text
 
+
+@traceable(
+    name="rag_pipeline"
+)
 def rag_pipeline(question, qdrant_client, top_k=5):
     retrieved_context = retrieve_data(question, qdrant_client, top_k)
     preprocessed_context = process_context(retrieved_context)
     prompt = build_prompt(preprocessed_context, question)
-    return generate_answer(prompt)
+    answer = generate_answer(prompt)
+    final_result = {
+        "answer": answer,
+        "question": question,
+        "retrieved_context_ids": retrieved_context["retrieved_context_ids"],
+        "retrieved_context": retrieved_context["retrieved_context"],
+        "similarity_scores": retrieved_context["similarity_scores"]
+    }
+
+    return final_result

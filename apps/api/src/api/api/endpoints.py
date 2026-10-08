@@ -27,7 +27,7 @@ def rag(
 
     return RAGResponse(
         request_id=request.state.request_id,
-        message=response
+        message=response["answer"]
     )
 
 api_router = APIRouter();
