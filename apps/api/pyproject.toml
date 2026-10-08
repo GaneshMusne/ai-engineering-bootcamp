@@ -11,11 +11,13 @@ dependencies = [
     "fastapi>=0.142.2",
     "google-genai>=2.27.0",
     "groq>=1.7.0",
+    "langgraph>=1.2.14",
     "langsmith>=0.14.4",
     "openai>=3.24.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "qdrant-client>=1.19.1",
+    "ragas>=0.3.1",
     "sentence-transformers>=6.1.0",
     "uvicorn>=0.54.0",
 ]
